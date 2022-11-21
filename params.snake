@@ -1,0 +1,26 @@
+RECAL=config['recal']
+
+if config['ref_gen'].lower()=='grch37': 
+    REF_GEN="/flask/reference/Genomics/aws-igenomes/Homo_sapiens/GATK/GRCh37/Sequence/WholeGenomeFasta/human_g1k_v37_decoy.fasta"
+    GR="/flask/reference/Genomics/aws-igenomes/Homo_sapiens/GATK/GRCh37/Annotation/GermlineResource/gnomAD.r2.1.1.GRCh37.PASS.AC.AF.only.vcf.gz"
+    PON="/camp/project/tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/panel_of_normals/somatic-b37_Mutect2-exome-panel.vcf.gz"
+    if config['panel_version']==6:
+        INT="/nemo/project/proj-tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/bed_files/No_chr_Rabbit_Hole_v6.bed"
+            #Alice said sarek produces bams without CHR when run with GRCh37? ask and reconfirm
+    elif config['panel_version']==7:
+        PASS #WHICH ONE IS THIS
+
+elif config['ref_gen'].lower()=='grch38':
+    REF_GEN="/flask/reference/Genomics/aws-igenomes/Homo_sapiens/GATK/GRCh38/Sequence/WholeGenomeFasta/Homo_sapiens_assembly38.fasta"
+    GR="/flask/reference/Genomics/aws-igenomes/Homo_sapiens/GATK/GRCh38/Annotation/GermlineResource/gnomAD.r2.1.1.GRCh38.PASS.AC.AF.only.vcf.gz"
+    PON="/camp/project/tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/panel_of_normals/somatic-hg38_1000g_pon.hg38.vcf.gz"
+    INT="/nemo/project/proj-tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/bed_files/Panel_v6_hg38.bed"
+    if config['panel_version']==6:
+        INT="/nemo/project/proj-tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/bed_files/Panel_v6_hg38.bed"
+    elif config['panel_version']==7:
+        INT="/nemo/project/proj-tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/bed_files/Panel_v7_hg38.bed"
+
+
+#VCF Filtering
+ROQ=config['ROQ']
+AD=config['AD']
