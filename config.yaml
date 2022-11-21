@@ -1,0 +1,14 @@
+# Panel verision 
+# Either 6 or 7
+panel_version: 6
+
+# Reference genome version
+# Either GRCh37 or GRCh38. Case insensitive
+ref_gen: GRCh38
+
+# Path to the Sarek's recalibrated.tsv output
+recal: /nemo/project/proj-tracerX/working/SRM/RABIA/Preprocessing/TSV/recalibrated.tsv
+
+# VCF quality filter thresholds
+ROQ: 20
+AD: 4
