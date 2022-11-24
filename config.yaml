@@ -7,7 +7,8 @@ panel_version: 6
 ref_gen: GRCh38
 
 # Path to the Sarek's recalibrated.tsv output
-recal: /nemo/project/proj-tracerX/working/SRM/RABIA/Preprocessing/TSV/recalibrated.tsv
+#/nemo/project/proj-tracerX/working/SRM/RABIA/Preprocessing/TSV/recalibrated.tsv
+recal: /nemo/project/proj-tracerX/working/SRM/RABIA/SAREK_1/Preprocessing/TSV/recalibrated.tsv
 
 # VCF quality filter thresholds
 ROQ: 20

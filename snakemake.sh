@@ -11,5 +11,5 @@
 
 source ~/.bashrc
 conda activate snakemake
-snakemake --latency-wait 300 --rerun-incomplete -p --cluster "sbatch --ntasks 1 --cpus-per-task {threads} --partition cpu --job-name {rule} --time 5:00:00 -e {params.err} -o {params.out} --mem {resources.mem_mb}" --jobs 500 --keep-going #--use-singularity
+snakemake --latency-wait 300 --rerun-incomplete -p --cluster "sbatch --ntasks 1 --cpus-per-task {threads} --partition cpu --job-name {rule} --time 5:00:00 -e {params.err} -o {params.out} --mem {resources.mem_mb}" --jobs 500 --keep-going --use-conda --use-envmodules #--use-singularity
 #snakemake --latency-wait 300 --rerun-incomplete -p --cluster "sbatch --ntasks=1 --cpus-per-task={threads} --partition=cpu --job-name={rule} --time=5:00:00 -e={params.err} -o={params.out} --mem={resources.mem_mb}" --jobs 500 --keep-going 

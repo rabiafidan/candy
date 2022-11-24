@@ -4,15 +4,15 @@ import pandas as pd
 import sys
 import logging
 
-logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[logging.StreamHandler()])
 
 recal=pd.read_csv(RECAL,sep='\t',names=['PatientName','Sex','SampleType','SampleName','bam','bai'])
-ALL_TUMOURS=[x for x in recal.loc[recal['SampleType']==1,'SampleName']]
-patients=list(set(recal['PatientName']))
 recal["rep"]=recal.apply(lambda x: "multi" if len(recal.loc[(recal['PatientName']==x.PatientName) & (recal['SampleType']==1),:])>1 else "single" , axis=1)
+ALL_TUMOURS=[x for x in recal.loc[recal['SampleType']==1,'SampleName']]
+all_single_tumour=[x for x in recal.loc[(recal['SampleType']==1)&(recal['rep']=='single'),'SampleName']]
+all_multi_tumour=[x for x in recal.loc[(recal['SampleType']==1)&(recal['rep']=='multi'),'SampleName']]
+patients=list(set(recal['PatientName']))
+multi_patients=list(set(recal.loc[recal['rep']=='multi',:]['PatientName']))
+single_patients=list(set(recal.loc[recal['rep']=='single',:]['PatientName']))
 
 normals=[]
 tumours=[]
@@ -22,12 +22,10 @@ for i in patients:
     tumours.append([x for x in tab2])
     normals.append([x for x in tab])
 
-localrules: all
-
 def get_normal_name(wildcards):
     pat=recal.loc[recal['SampleName']==wildcards.tum,'PatientName']
     nor=recal.loc[(recal['PatientName']==pat.iloc[0]) & (recal['SampleType']==0) ,'SampleName']
-    return nor[0]
+    return nor.iloc[0]
 def get_normal_bam(wildcards):
     pat=recal.loc[recal['SampleName']==wildcards.tum,'PatientName']
     norbam=recal.loc[(recal['PatientName']==pat.iloc[0]) & (recal['SampleType']==0) ,'bam']
@@ -43,21 +41,32 @@ def get_tumour_bai(wildcards):
     tumbai=recal.loc[recal['SampleName']==wildcards.tum ,'bai']
     return list(tumbai)
 
-def get_patient_tumour_vcf(wildcards):
+def get_multi_patient_tumour_vcf(wildcards):
     idx=patients.index(wildcards.patient)
     pat_tum= tumours[idx]
-    return [f"Mutect2/temp/fil_{a}.vcf.gz" for a in pat_tum]
+    return [f"Mutect2/temp/multi/fil_{a}.vcf.gz" for a in pat_tum]
+
+def get_multi_patient_tumour_vcf_index(wildcards):
+    idx=patients.index(wildcards.patient)
+    pat_tum= tumours[idx]
+    return [f"Mutect2/temp/multi/fil_{a}.vcf.gz.tbi" for a in pat_tum]
+
 
 onstart:
-    if set([len(x)] for x in normals) != {1}:
-        logging.error("Each patient must have only 1 normal!")
+    if set([len(x) for x in normals]) != {1}:
+        print("Each patient must have only 1 normal!")
         sys.exit(1)
+    shell('mkdir -p logs/Mutect2_call logs/learn_model logs/add_flags logs/vcf_index logs/vcf_normalise logs/qual_filter logs/patient_positions')
+
+localrules: all 
 
 rule all:
     input:
-        "Mutect2/temp/test1_valid_positions"
-        #['Mutect2/or_filtered/{tum}.vcf.gz'.format(tum=tums)for tums in ALL_TUMOURS]
-        #['Mutect2/unfiltered/{tum}.vcf.gz'.format(tum=tums)for tums in ALL_TUMOURS]
+        #['Mutect2/temp/single/fil_{tum}.vcf.gz'.format(tum=tums)for tums in all_single_tumour],
+        #['Mutect2/temp/multi/fil_{tum}.vcf.gz'.format(tum=tums)for tums in all_multi_tumour],
+        ['Mutect2/temp/multi/{patient}_valid_pos.vcf'.format(patient=pats)for pats in multi_patients],
+        ['Mutect2/temp/single/fil_{tum}.vcf.gz.tbi'.format(tum=tums)for tums in all_single_tumour]
+        
 
 rule Mutect2_call:
     """
@@ -74,6 +83,7 @@ rule Mutect2_call:
         intv=INT,
         pon=PON
     output:
+        temp("Mutect2/unfiltered/{tum}.vcf.gz.stats"),
         v='Mutect2/unfiltered/{tum}.vcf.gz',
         n='Mutect2/noise/{tum}.tar.gz'
     params:
@@ -131,7 +141,8 @@ rule add_flags:
         v='Mutect2/unfiltered/{tum}.vcf.gz',
         priors='Mutect2/noise/{tum}-read-orientation-model.tar.gz'
     output:
-        v='Mutect2/or_filtered/{tum}.vcf.gz'
+        'Mutect2/temp/or_flagged_{tum}.vcf.gz.filteringStats.tsv',
+        v='Mutect2/temp/or_flagged_{tum}.vcf.gz'
     params:
         err=lambda wildcards: "logs/{rule}/{wildcards.tum}.err",
 	    out=lambda wildcards: "logs/{rule}/{wildcards.tum}.out"	
@@ -155,9 +166,9 @@ rule vcf_index:
     #Step4 of mutect2_ROB_isLegacy_targetedOrWGS_hg38.sh
     """
     input:
-        'Mutect2/or_filtered/{tum}.vcf.gz'
+        'Mutect2/temp/or_flagged_{tum}.vcf.gz'
     output:
-        'Mutect2/or_filtered/{tum}.vcf.gz.tbi'
+        'Mutect2/temp/or_flagged_{tum}.vcf.gz.tbi'
     params:
         err=lambda wildcards: "logs/{rule}/{wildcards.tum}.err",
 	    out=lambda wildcards: "logs/{rule}/{wildcards.tum}.out"	
@@ -176,16 +187,14 @@ rule vcf_normalise:
     #Step1 of filterAndMergeSingleSample_noGLrescue.sh
     """
     input:
-        'Mutect2/or_filtered/{tum}.vcf.gz.tbi',
-        v='Mutect2/or_filtered/{tum}.vcf.gz'
+        'Mutect2/temp/or_flagged_{tum}.vcf.gz.tbi',
+        v='Mutect2/temp/or_flagged_{tum}.vcf.gz'
     output:
-        v=temp('Mutect2/temp/norm_{tum}.vcf.gz'),
-        i=temp('Mutect2/temp/norm_{tum}.vcf.gz.tbi')
+        v='Mutect2/temp/norm_{tum}.vcf.gz',
+        i='Mutect2/temp/norm_{tum}.vcf.gz.tbi'
     params:
         err=lambda wildcards: "logs/{rule}/{wildcards.tum}.err",
 	    out=lambda wildcards: "logs/{rule}/{wildcards.tum}.out"	
-    envmodules :
-        "BCFtools/1.12-GCC-10.2.0"
     threads: 1
     resources:
         mem_mb=10000
@@ -210,8 +219,8 @@ rule qual_filter:
         'Mutect2/temp/norm_{tum}.vcf.gz.tbi',
         v='Mutect2/temp/norm_{tum}.vcf.gz'
     output:
-        v=temp('Mutect2/temp/fil_{tum}.vcf.gz'),
-        i=temp('Mutect2/temp/fil_{tum}.vcf.gz.tbi')
+        v='Mutect2/temp/{rep}/fil_{tum}.vcf.gz',
+        i='Mutect2/temp/{rep}/fil_{tum}.vcf.gz.tbi'
     params:
         AD=AD,
         ROQ=ROQ,
@@ -225,20 +234,21 @@ rule qual_filter:
     shell:
         """
         /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools view \
-        -i '(ROQ>{params.ROQ} & AD[0:1]>{params.AD}) & (FILTER="PASS" | FILTER="clustered_events" )' -Oz -o {output.v} {input.v}
+        -i '(ROQ>{params.ROQ} & AD[1:1]>{params.AD}) & (FILTER="PASS" | FILTER="clustered_events" )' -Oz -o {output.v} {input.v}
         /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools tabix {output.v}
         """
 
-
+### MULTI SAMPLE ###
 rule patient_positions:
     """
     Union of all valid postions (allele aware) of samples coming from a patient.
-    Step #4 of filterAndMergeSingleSample_noGLrescue.sh
+    Step #3 of filterAndMergeSingleSample_noGLrescue.sh
     """
     input:
-        expand('Mutect2/temp/fil_{tum}.vcf.gz', tum=get_patient_tumours())
+       v=get_multi_patient_tumour_vcf,
+       i=get_multi_patient_tumour_vcf_index
     output:
-        "Mutect2/temp/{patient}_valid_positions"
+       "Mutect2/temp/multi/{patient}_valid_pos.txt"
     params:
         err=lambda wildcards: "logs/{rule}/{wildcards.patient}.err",
 	    out=lambda wildcards: "logs/{rule}/{wildcards.patient}.out"
@@ -247,6 +257,61 @@ rule patient_positions:
         mem_mb=10000
     shell:
         """
-        zcat {input} | grep -v "^#" | cut -f1-5 | sort -V | uniq > {output}
-        echo $(wc -l {output} | awk '{print $1}') "valid variants found"
+        zcat {input.v} | grep -v "^#" | cut -f1-5 | sort -V | uniq > {output}
+        """
+   
+rule retrieve_from_vcf:
+    """
+    Filter unfiltered VCF with these positions
+    Step #4 of filterAndMergeSingleSample_noGLrescue.sh
+    """
+    input:
+        pos=lambda wildcards: "Mutect2/temp/multi/" + recal.loc[recal['SampleName']==wildcards.tum,'PatientName'].iloc[0]+ "_valid_pos.txt",
+        v="Mutect2/temp/norm_{tum}.vcf.gz",
+        i="Mutect2/temp/norm_{tum}.vcf.gz.tbi"
+    output:
+       v="Mutect2/temp/multi/{tum}_premerge.vcf.gz",
+       i="Mutect2/temp/multi/{tum}_premerge.vcf.gz.tbi"
+    params:
+        err=lambda wildcards: "logs/{rule}/{wildcards.tum}.err",
+	    out=lambda wildcards: "logs/{rule}/{wildcards.tum}.out"
+    threads: 1
+    resources:
+        mem_mb=10000
+    envmodules:
+        "HTSlib/1.14-GCC-11.2.0"
+    shell:
+        """
+	    zcat {input.v} | grep "^#" | bgzip >{output.v}
+	    for x in $(seq 1 1000 $(wc -l {input.pos} | awk '{{print $1}}'))
+	    do
+		y=$((x+999))
+		zcat {input.v} | grep -v "^#" | grep --line-buffered -f <(sed -n "${{x}},${{y}}p" {input.p}) - | bgzip >> {output.v}
+	    done
+	    /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools tabix {output.v}
+        """
+
+rule merge_vcf:
+    """
+    Merge filtered vcf files
+    Step #5 of filterAndMergeSingleSample_noGLrescue.sh
+    """
+    input:
+        v=lambda wildcards: ["Mutect2/temp/multi/"+ tum +"_premerge.vcf.gz" for tum in recal.loc[(recal["PatientName"]==wildcards.patient)&(recal["SampleType"]==1),"SampleName"].tolist()],
+        i=lambda wildcards: ["Mutect2/temp/multi/"+ tum +"_premerge.vcf.gz.tbi" for tum in recal.loc[(recal["PatientName"]==wildcards.patient)&(recal["SampleType"]==1),"SampleName"].tolist()]
+    output:
+        v="Mutect2/temp/multi/{patient}_merged_vcf.gz",
+        i="Mutect2/temp/multi/{patient}_merged_vcf.gz.tbi"
+    params:
+        err=lambda wildcards: "logs/{rule}/{wildcards.patient}.err",
+	    out=lambda wildcards: "logs/{rule}/{wildcards.patient}.out"
+    threads: 1
+    resources:
+        mem_mb=10000
+    envmodules:
+        "HTSlib/1.14-GCC-11.2.0"
+    shell:
+        """
+	    /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools merge -0 -Oz -o {output} --force-samples {input.v}
+	    /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools tabix {output.v}
         """
