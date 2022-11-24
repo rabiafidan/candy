@@ -16,11 +16,15 @@ single_patients=list(set(recal.loc[recal['rep']=='single',:]['PatientName']))
 
 normals=[]
 tumours=[]
+nb=[]
+tb=[]
 for i in patients:
-    tab=recal.loc[(recal['PatientName']==i) & (recal['SampleType']==0) ,'SampleName'] #germline
-    tab2=recal.loc[(recal['PatientName']==i) & (recal['SampleType']==1) ,'SampleName'] #tumour
-    tumours.append([x for x in tab2])
-    normals.append([x for x in tab])
+    tab=recal.loc[(recal['PatientName']==i) & (recal['SampleType']==0) ,['SampleName',"bam"]] #germline
+    tab2=recal.loc[(recal['PatientName']==i) & (recal['SampleType']==1) ,['SampleName',"bam"]] #tumour
+    tumours.append([x for x in tab2["SampleName"]])
+    normals.append([x for x in tab["SampleName"]])
+    tb.append([x for x in tab2["bam"]])
+    nb.append([x for x in tab["bam"]])
 
 def get_normal_name(wildcards):
     pat=recal.loc[recal['SampleName']==wildcards.tum,'PatientName']
@@ -305,4 +309,94 @@ rule merge_vcf:
         """
         /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools merge -0 -Oz -o {output.v} --force-samples {input.v}
 	    /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools tabix {output.v}
+        """
+
+
+rule remove_germline:
+    """
+    Remove extra germline columns in vcfs
+    Step #6 of filterAndMergeSingleSample_noGLrescue.sh
+    """
+    input:
+       "Mutect2/temp/multi/{patient}_merged.vcf.gz.tbi",
+       v="Mutect2/temp/multi/{patient}_merged.vcf.gz"
+    output:
+       "Mutect2/temp/multi/{patient}_merged_GL_removed_sorted.vcf.gz.tbi",
+       s=temp("{patient}_to_keep.txt"),
+       v1=temp("Mutect2/temp/multi/{patient}_merged_GL_removed.vcf.gz"),
+       v2="Mutect2/temp/multi/{patient}_merged_GL_removed_sorted.vcf.gz"
+    params:
+        err=lambda wildcards: "logs/{rule}/{wildcards.patient}.err",
+	    out=lambda wildcards: "logs/{rule}/{wildcards.patient}.out",
+        GL=lambda wildcards: normals[patients.index(wildcards.patient)][0]
+    threads: 1      
+    resources:
+        mem_mb=10000
+    envmodules:
+        "HTSlib/1.14-GCC-11.2.0"
+    shell:
+        """
+        echo {params.GL} > {output.s}
+        /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools query -l {input.v} | grep -v {params.GL} >> {output.s}
+        /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools view -S {output.s} {input.v} -Oz -o {output.v1} 
+        /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools sort {output.v1} -Oz -o {output.v2}
+        tabix -p vcf {output.v2}
+        """
+
+
+rule normalise_merged:
+    """
+    Normalise the merged vcfs
+    """
+    input:
+       "Mutect2/temp/multi/{patient}_merged_GL_removed_sorted.vcf.gz.tbi",
+       v="Mutect2/temp/multi/{patient}_merged_GL_removed_sorted.vcf.gz"
+    output:
+       "Mutect2/temp/multi/{patient}_norm.vcf.gz"
+    params:
+        err=lambda wildcards: "logs/{rule}/{wildcards.patient}.err",
+	    out=lambda wildcards: "logs/{rule}/{wildcards.patient}.out"
+    threads: 1      
+    resources:
+        mem_mb=10000
+    envmodules:
+        "HTSlib/1.14-GCC-11.2.0"  
+    shell:
+        """
+        /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools norm -m -any {input.v} | bgzip > {output}
+        """
+
+
+rule rescue_mission:
+    """
+    Read the missing information vcf files from corresponding bam files and fill in that information in vcfs.
+    """
+    input:
+        v="Mutect2/temp/multi/{patient}_norm.vcf.gz",
+        nb=lambda wildcards: nb[patients.index(wildcards.patient)][0],
+        tb=lambda wildcards: tb[patients.index(wildcards.patient)]
+    output:
+       v="Mutect2/multi/{patient}.vcf.gz",
+       bamlist=temp("Mutect2/temp/multi/{patient}_bamlist.txt"),
+       obamlist=temp("Mutect2/temp/multi/{patient}_ordered_bamlist.txt"),
+       s=temp("Mutect2/temp/multi/{patient}_samples.txt")
+    params:
+        err=lambda wildcards: "logs/{rule}/{wildcards.patient}.err",
+	    out=lambda wildcards: "logs/{rule}/{wildcards.patient}.out",
+        res=RES
+    threads: 1      
+    resources:
+        mem_mb=10000
+    envmodules:
+        "Python/3.6.6-foss",
+        "Pysam/0.15.1-foss-2018b-Python-3.6.6"    
+    shell:
+        """
+        # Make a list of bams in VCF order
+        echo {input.nb} > {output.bamlist}
+        for i in {input.tb}; do echo $i >> {output.bamlist}; done
+        /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools query -l {input.v} >> {output.s}
+        while read i; do grep $i {output.bamlist} >> {output.obamlist}; done< {output.s}
+        #Genotype (SNVs, MNVs and indels)
+        python3.6 {params.res} {input.v} {output.obamlist} {output.v}
         """

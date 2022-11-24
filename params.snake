@@ -24,3 +24,6 @@ elif config['ref_gen'].lower()=='grch38':
 #VCF Filtering
 ROQ=config['ROQ']
 AD=config['AD']
+
+#Rescue
+RES=config["rescue"]

@@ -13,3 +13,7 @@ recal: /nemo/project/proj-tracerX/working/SRM/RABIA/SAREK_1/Preprocessing/TSV/re
 # VCF quality filter thresholds
 ROQ: 20
 AD: 4
+
+## Rescue script path:
+rescue: /nemo/project/proj-tracerX/working/PIPELINES/readOrientationBias_filtering_mutect2/v0.3/rescue_genotypes/annotate_allBams_info_indelsToo_forSarek_halfEmptyToo.py
+
