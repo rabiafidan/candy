@@ -1,3 +1,5 @@
+Automation of the workflow originally developped by Irene Lobon
+
 # Candy lab analysis workflow
 
 1) Mutect2 variant calling
