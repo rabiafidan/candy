@@ -1,6 +1,8 @@
-# Panel verision 
-# Either 6 or 7
-panel_version: 6
+# Targeted sequencing type 
+# 6 or 7 for Panel v6 and v7;
+# SS5 or SS6 for SureSelect v5 and SureSelect v6
+# TE for Twist_ComprehensiveExome
+target: 6
 
 # Reference genome version
 # Either GRCh37 or GRCh38. Case insensitive
