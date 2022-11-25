@@ -4,53 +4,18 @@ import pandas as pd
 import sys
 import logging
 
-
-recal=pd.read_csv(RECAL,sep='\t',names=['PatientName','Sex','SampleType','SampleName','bam','bai'])
-recal["rep"]=recal.apply(lambda x: "multi" if len(recal.loc[(recal['PatientName']==x.PatientName) & (recal['SampleType']==1),:])>1 else "single" , axis=1)
-ALL_TUMOURS=[x for x in recal.loc[recal['SampleType']==1,'SampleName']]
-all_single_tumour=[x for x in recal.loc[(recal['SampleType']==1)&(recal['rep']=='single'),'SampleName']]
-all_multi_tumour=[x for x in recal.loc[(recal['SampleType']==1)&(recal['rep']=='multi'),'SampleName']]
-patients=list(set(recal['PatientName']))
-multi_patients=list(set(recal.loc[recal['rep']=='multi',:]['PatientName']))
-single_patients=list(set(recal.loc[recal['rep']=='single',:]['PatientName']))
-
-normals=[]
-tumours=[]
-nb=[]
-tb=[]
-for i in patients:
-    tab=recal.loc[(recal['PatientName']==i) & (recal['SampleType']==0) ,['SampleName',"bam"]] #germline
-    tab2=recal.loc[(recal['PatientName']==i) & (recal['SampleType']==1) ,['SampleName',"bam"]] #tumour
-    tumours.append([x for x in tab2["SampleName"]])
-    normals.append([x for x in tab["SampleName"]])
-    tb.append([x for x in tab2["bam"]])
-    nb.append([x for x in tab["bam"]])
-
-def get_normal_name(wildcards):
-    pat=recal.loc[recal['SampleName']==wildcards.tum,'PatientName']
-    nor=recal.loc[(recal['PatientName']==pat.iloc[0]) & (recal['SampleType']==0) ,'SampleName']
-    return nor.iloc[0]
-def get_normal_bam(wildcards):
-    pat=recal.loc[recal['SampleName']==wildcards.tum,'PatientName']
-    norbam=recal.loc[(recal['PatientName']==pat.iloc[0]) & (recal['SampleType']==0) ,'bam']
-    return list(norbam)
-def get_normal_bai(wildcards):
-    pat=recal.loc[recal['SampleName']==wildcards.tum,'PatientName']
-    norbai=recal.loc[(recal['PatientName']==pat.iloc[0]) & (recal['SampleType']==0) ,'bai']
-    return list(norbai)
-def get_tumour_bam(wildcards):
-    tumbam=recal.loc[recal['SampleName']==wildcards.tum ,'bam']
-    return list(tumbam)
-def get_tumour_bai(wildcards):
-    tumbai=recal.loc[recal['SampleName']==wildcards.tum ,'bai']
-    return list(tumbai)
-
+#Logging config
+logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[logging.StreamHandler()]
+    )
 
 onstart:
     if set([len(x) for x in normals]) != {1}:
-        print("Each patient must have only 1 normal!")
+        logging.error("Each patient must have only 1 normal!")
         sys.exit(1)
-    shell('mkdir -p logs/Mutect2_call logs/learn_model logs/add_flags logs/vcf_index logs/vcf_normalise logs/qual_filter logs/patient_positions')
+    shell('mkdir -p logs/Mutect2_call logs/learn_model logs/add_flags logs/vcf_index logs/vcf_normalise logs/qual_filter logs/patient_positions logs/single_sample logs/retrieve_from_vcf logs/merge_vcf logs/remove_germline logs/normalise_merged logs/rescue_mission')
 
 localrules: all 
 
@@ -58,8 +23,8 @@ rule all:
     input:
         #['Mutect2/temp/single/fil_{tum}.vcf.gz'.format(tum=tums)for tums in all_single_tumour],
         #['Mutect2/temp/multi/fil_{tum}.vcf.gz'.format(tum=tums)for tums in all_multi_tumour],
-        ['Mutect2/temp/multi/{patient}_valid_pos.vcf'.format(patient=pats)for pats in multi_patients],
-        ['Mutect2/temp/single/fil_{tum}.vcf.gz.tbi'.format(tum=tums)for tums in all_single_tumour]
+        ['Mutect2/multi/{patient}.vcf.gz'.format(patient=pats)for pats in multi_patients],
+        ['Mutect2/single/{patient}.vcf.gz'.format(patient=pats)for pats in single_patients],
         
 
 rule Mutect2_call:
@@ -231,6 +196,29 @@ rule qual_filter:
         -i '(ROQ>{params.ROQ} & AD[1:1]>{params.AD}) & (FILTER="PASS" | FILTER="clustered_events" )' -Oz -o {output.v} {input.v}
         /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools tabix {output.v}
         """
+### SINGLE SAMPLE ###
+rule single_sample:
+    """
+    For single sample tumours, this is the final filtered vcf. Copy this to a permanent result diretory.
+    """
+    input:
+        v=lambda wildcards: "Mutect2/temp/single/fil_"+ tumours[patients.index(wildcards.patient)][0]+".vcf.gz",
+        i=lambda wildcards: "Mutect2/temp/single/fil_"+ tumours[patients.index(wildcards.patient)][0]+".vcf.gz.tbi"
+    output:
+        v='Mutect2/single/{patient}.vcf.gz',
+        i='Mutect2/single/{patient}.vcf.gz.tbi'
+    params:
+        err=lambda wildcards: "logs/{rule}/{wildcards.patient}.err",
+	    out=lambda wildcards: "logs/{rule}/{wildcards.patient}.out"	
+    threads: 1
+    resources:
+        mem_mb=10000
+    shell:
+        """
+        cp {input.v} {output.v}
+        cp {input.i} {output.i}
+        """
+
 
 ### MULTI SAMPLE ###
 rule patient_positions:
@@ -253,6 +241,7 @@ rule patient_positions:
         """
         zcat {input.v} | grep -v "^#" | cut -f1-5 | sort -V | uniq > {output}
         """
+
    
 rule retrieve_from_vcf:
     """
@@ -260,7 +249,7 @@ rule retrieve_from_vcf:
     Step #4 of filterAndMergeSingleSample_noGLrescue.sh
     """
     input:
-        pos=lambda wildcards: "Mutect2/temp/multi/" + patients[tumours.index(wildcards.tum)]+ "_valid_pos.txt",
+        pos=lambda wildcards: "Mutect2/temp/multi/" + recal.loc[recal['SampleName']==wildcards.tum,'PatientName'].iloc[0]+ "_valid_pos.txt",
         v="Mutect2/temp/norm_{tum}.vcf.gz",
         i="Mutect2/temp/norm_{tum}.vcf.gz.tbi"
     output:

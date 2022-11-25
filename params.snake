@@ -1,24 +1,43 @@
+import pandas as pd
+import logging
+
 RECAL=config['recal']
 
 if config['ref_gen'].lower()=='grch37': 
     REF_GEN="/flask/reference/Genomics/aws-igenomes/Homo_sapiens/GATK/GRCh37/Sequence/WholeGenomeFasta/human_g1k_v37_decoy.fasta"
     GR="/flask/reference/Genomics/aws-igenomes/Homo_sapiens/GATK/GRCh37/Annotation/GermlineResource/gnomAD.r2.1.1.GRCh37.PASS.AC.AF.only.vcf.gz"
     PON="/camp/project/tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/panel_of_normals/somatic-b37_Mutect2-exome-panel.vcf.gz"
-    if config['panel_version']==6:
+    if config['target']==6:
         INT="/nemo/project/proj-tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/bed_files/No_chr_Rabbit_Hole_v6.bed"
-            #Alice said sarek produces bams without CHR when run with GRCh37? ask and reconfirm
-    elif config['panel_version']==7:
-        PASS #WHICH ONE IS THIS
+            #bams without CHR when run with GRCh37
+    elif config['target']==7:
+        logging.error("Required bed file does not exist. Speak to Rabia!".upper())
+        sys.exit(1)
+    elif config["target"].lower()=="ss5":
+        INT="/nemo/project/proj-tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/bed_files/SureSelect_Exome_v5_Covered-hg19.bed"
+    elif config["target"].lower()=="ss6":
+        INT="/nemo/project/proj-tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/bed_files/SureSelectXT_Human_All_Exon_V6_r2_S07604514_hs_hg19"
+    elif config["target"].lower()=='te':
+        INT="/nemo/project/proj-tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/bed_files/Twist_ComprehensiveExome_v1/Twist_ComprehensiveExome_targets_GRCh37_sorted.bed"
+
 
 elif config['ref_gen'].lower()=='grch38':
     REF_GEN="/flask/reference/Genomics/aws-igenomes/Homo_sapiens/GATK/GRCh38/Sequence/WholeGenomeFasta/Homo_sapiens_assembly38.fasta"
     GR="/flask/reference/Genomics/aws-igenomes/Homo_sapiens/GATK/GRCh38/Annotation/GermlineResource/gnomAD.r2.1.1.GRCh38.PASS.AC.AF.only.vcf.gz"
     PON="/camp/project/tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/panel_of_normals/somatic-hg38_1000g_pon.hg38.vcf.gz"
     INT="/nemo/project/proj-tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/bed_files/Panel_v6_hg38.bed"
-    if config['panel_version']==6:
+    if config['target']==6:
         INT="/nemo/project/proj-tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/bed_files/Panel_v6_hg38.bed"
-    elif config['panel_version']==7:
+    elif config['target']==7:
         INT="/nemo/project/proj-tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/bed_files/Panel_v7_hg38.bed"
+    elif config["target"].lower()=="ss5":
+        logging.error("Required bed file does not exist. Speak to Rabia!".upper())
+        sys.exit(1)
+    elif config["target"].lower()=="ss6":
+        logging.error("Required bed file does not exist. Speak to Rabia!".upper())
+        sys.exit(1)
+    elif config["target"].lower()=='te':
+        INT="/nemo/project/proj-tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/bed_files/Twist_Comprehensive_Exome_Covered_Targets_hg38.bed"
 
 
 #VCF Filtering
@@ -27,3 +46,46 @@ AD=config['AD']
 
 #Rescue
 RES=config["rescue"]
+
+
+## input functions and variables
+recal=pd.read_csv(RECAL,sep='\t',names=['PatientName','Sex','SampleType','SampleName','bam','bai'])
+recal["rep"]=recal.apply(lambda x: "multi" if len(recal.loc[(recal['PatientName']==x.PatientName) & (recal['SampleType']==1),:])>1 else "single" , axis=1)
+ALL_TUMOURS=[x for x in recal.loc[recal['SampleType']==1,'SampleName']]
+all_single_tumour=[x for x in recal.loc[(recal['SampleType']==1)&(recal['rep']=='single'),'SampleName']]
+all_multi_tumour=[x for x in recal.loc[(recal['SampleType']==1)&(recal['rep']=='multi'),'SampleName']]
+patients=list(set(recal['PatientName']))
+multi_patients=list(set(recal.loc[recal['rep']=='multi',:]['PatientName']))
+single_patients=list(set(recal.loc[recal['rep']=='single',:]['PatientName']))
+
+normals=[]
+tumours=[]
+nb=[]
+tb=[]
+for i in patients:
+    tab=recal.loc[(recal['PatientName']==i) & (recal['SampleType']==0) ,['SampleName',"bam"]] #germline
+    tab2=recal.loc[(recal['PatientName']==i) & (recal['SampleType']==1) ,['SampleName',"bam"]] #tumour
+    tumours.append([x for x in tab2["SampleName"]])
+    normals.append([x for x in tab["SampleName"]])
+    tb.append([x for x in tab2["bam"]])
+    nb.append([x for x in tab["bam"]])
+
+def get_normal_name(wildcards):
+    pat=recal.loc[recal['SampleName']==wildcards.tum,'PatientName']
+    nor=recal.loc[(recal['PatientName']==pat.iloc[0]) & (recal['SampleType']==0) ,'SampleName']
+    return nor.iloc[0]
+def get_normal_bam(wildcards):
+    pat=recal.loc[recal['SampleName']==wildcards.tum,'PatientName']
+    norbam=recal.loc[(recal['PatientName']==pat.iloc[0]) & (recal['SampleType']==0) ,'bam']
+    return list(norbam)
+def get_normal_bai(wildcards):
+    pat=recal.loc[recal['SampleName']==wildcards.tum,'PatientName']
+    norbai=recal.loc[(recal['PatientName']==pat.iloc[0]) & (recal['SampleType']==0) ,'bai']
+    return list(norbai)
+def get_tumour_bam(wildcards):
+    tumbam=recal.loc[recal['SampleName']==wildcards.tum ,'bam']
+    return list(tumbam)
+def get_tumour_bai(wildcards):
+    tumbai=recal.loc[recal['SampleName']==wildcards.tum ,'bai']
+    return list(tumbai)
+
