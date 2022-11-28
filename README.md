@@ -11,16 +11,17 @@ Automation of the workflow originally developped by Irene Lobon
 ```
 git clone --branch pipeline https://github.com/rabiafidan/SRM.git
 ```
+and change directory to the repo
+
 
 ### configure
 edit `config.yaml` as you need
 
 ### run
-check `snakemake.sh` for the pipeline in cluster mode.
-run it locally:
+check `snakemake.sh` for usage. Comment/uncomment as you wish.
 
 ```
-snakemake --latency-wait 100 --rerun-incomplete -p --cluster --keep-going --use-conda --use-envmodules
+sbatch snakemake.sh
 ```
 
 ## Output files
