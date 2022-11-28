@@ -11,5 +11,21 @@
 
 source ~/.bashrc
 conda activate snakemake
-snakemake --latency-wait 300 --rerun-incomplete -p --cluster "sbatch --ntasks 1 --cpus-per-task {threads} --partition cpu --job-name {rule} --time 5:00:00 -e {params.err} -o {params.out} --mem {resources.mem_mb}" --jobs 500 --keep-going --use-conda --use-envmodules #--use-singularity
-#snakemake --latency-wait 300 --rerun-incomplete -p --cluster "sbatch --ntasks=1 --cpus-per-task={threads} --partition=cpu --job-name={rule} --time=5:00:00 -e={params.err} -o={params.out} --mem={resources.mem_mb}" --jobs 500 --keep-going 
+
+
+##### uncomment as you wish ######
+
+# single sample cluster
+#snakemake Mutect2/multi/RFH001.vcf.gz --latency-wait 100 --rerun-incomplete -p --cluster "sbatch --ntasks 1 --cpus-per-task {threads} --partition cpu --job-name {rule} --time 5:00:00 -e {params.err} -o {params.out} --mem {resources.mem_mb}" --jobs 1000 --keep-going --use-envmodules
+
+#single sample local
+#snakemake Mutect2/multi/RFH001.vcf.gz --latency-wait 100 --rerun-incomplete -p --use-envmodules -c1
+
+#all cluster
+#snakemake --latency-wait 300 --rerun-incomplete -p --cluster "sbatch --ntasks 1 --cpus-per-task {threads} --partition cpu --job-name {rule} --time 5:00:00 -e {params.err} -o {params.out} --mem {resources.mem_mb}" --jobs 1000 --keep-going --use-envmodules 
+
+#singe samle dryrun
+#snakemake Mutect2/multi/RFH001.vcf.gz --rerun-incomplete -p --use-envmodules --dry-run
+
+#all dryrun
+#snakemake --rerun-incomplete -p --use-envmodules --dry-run
