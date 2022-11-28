@@ -96,6 +96,7 @@ rule add_flags:
     #Step4 of mutect2_ROB_isLegacy_targetedOrWGS_hg38.sh
     """
     input:
+	"Mutect2/unfiltered/{tum}.vcf.gz.stats",
         r=REF_GEN,
         v='Mutect2/unfiltered/{tum}.vcf.gz',
         priors='Mutect2/noise/{tum}-read-orientation-model.tar.gz'
