@@ -1,3 +1,0 @@
-test1	XX	1	tumor_sample	1	/nemo/project/proj-tracerX/working/SRM/RABIA/FASTQ/tumor_R1.fastq.gz	/nemo/project/proj-tracerX/working/SRM/RABIA/FASTQ/tumor_R2.fastq.gz
-test1	XX	1	tumor_sample	2	/nemo/project/proj-tracerX/working/SRM/RABIA/FASTQ/tumorl2_R1.fastq.gz	/nemo/project/proj-tracerX/working/SRM/RABIA/FASTQ/tumorl2_R2.fastq.gz
-test1	XX	0	normal_sample	1	/nemo/project/proj-tracerX/working/SRM/RABIA/FASTQ/normal_R1.fastq.gz	/nemo/project/proj-tracerX/working/SRM/RABIA/FASTQ/normal_R2.fastq.gz
