@@ -55,8 +55,7 @@ rule Mutect2_call:
     resources:
         mem_mb=16000
     shell:
-        """
-        java -jar $EBROOTGATK/gatk-package-4.1.8.1-local.jar Mutect2 \
+        "java -jar $EBROOTGATK/gatk-package-4.1.8.1-local.jar Mutect2 \
         --native-pair-hmm-threads {threads} \
         -R {input.ref} \
         -L {input.intv} \
@@ -66,8 +65,7 @@ rule Mutect2_call:
         -germline-resource {input.gr} \
         -pon {input.pon} \
         --f1r2-tar-gz {output.n} \
-        -O {output.v}
-        """
+        -O {output.v}"
 
 rule learn_model:
     """
@@ -98,7 +96,7 @@ rule add_flags:
     #Step4 of mutect2_ROB_isLegacy_targetedOrWGS_hg38.sh
     """
     input:
-        "Mutect2/unfiltered/{tum}.vcf.gz.stats",
+	"Mutect2/unfiltered/{tum}.vcf.gz.stats",
         r=REF_GEN,
         v='Mutect2/unfiltered/{tum}.vcf.gz',
         priors='Mutect2/noise/{tum}-read-orientation-model.tar.gz'
@@ -164,6 +162,7 @@ rule vcf_normalise:
         "HTSlib/1.14-GCC-11.2.0" 
     shell:
         """
+        #echo "##INFO=<ID=AS_FilterStatus,Number=A" | sed "s/##INFO=<ID=AS_FilterStatus,Number=A/##INFO=<ID=AS_FilterStatus,Number=1/" && touch {output.v} && touch {output.i}
         /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools norm -m -any {input.v} | sed "s/##INFO=<ID=AS_FilterStatus,Number=A/##INFO=<ID=AS_FilterStatus,Number=1/" | bgzip > {output.v}
 	    /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools tabix {output.v}
         """
