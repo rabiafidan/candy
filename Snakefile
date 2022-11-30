@@ -4,16 +4,10 @@ import pandas as pd
 import sys
 import logging
 
-#Logging config
-logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[logging.StreamHandler()]
-    )
 
 onstart:
     if set([len(x) for x in normals]) != {1}:
-        logging.error("Each patient must have only 1 normal!")
+        print("Each patient must have only 1 normal!")
         sys.exit(1)
     shell('mkdir -p logs/Mutect2_call logs/learn_model logs/add_flags logs/vcf_index logs/vcf_normalise logs/qual_filter logs/patient_positions logs/single_sample logs/retrieve_from_vcf logs/merge_vcf logs/remove_germline logs/normalise_merged logs/rescue_mission')
 
