@@ -1,5 +1,5 @@
 import pandas as pd
-import logging
+
 
 RECAL=config['recal']
 
@@ -11,7 +11,7 @@ if config['ref_gen'].lower()=='grch37':
         INT="/nemo/project/proj-tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/bed_files/No_chr_Rabbit_Hole_v6.bed"
             #bams without CHR when run with GRCh37
     elif config['target']==7:
-        logging.error("Required bed file does not exist. Speak to Rabia!".upper())
+        print("#######ERROR: Required bed file does not exist. Speak to Rabia!".upper())
         sys.exit(1)
     elif config["target"].lower()=="ss5":
         INT="/nemo/project/proj-tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/bed_files/SureSelect_Exome_v5_Covered-hg19.bed"
@@ -31,10 +31,10 @@ elif config['ref_gen'].lower()=='grch38':
     elif config['target']==7:
         INT="/nemo/project/proj-tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/bed_files/Panel_v7_hg38.bed"
     elif config["target"].lower()=="ss5":
-        logging.error("Required bed file does not exist. Speak to Rabia!".upper())
+        print("#######ERROR: Required bed file does not exist. Speak to Rabia!".upper())
         sys.exit(1)
     elif config["target"].lower()=="ss6":
-        logging.error("Required bed file does not exist. Speak to Rabia!".upper())
+        print("#######ERROR: Required bed file does not exist. Speak to Rabia!".upper())
         sys.exit(1)
     elif config["target"].lower()=='te':
         INT="/nemo/project/proj-tracerX/working/PIPELINES/nf-core/sarek/2.7/custom_references/bed_files/Twist_Comprehensive_Exome_Covered_Targets_hg38.bed"
