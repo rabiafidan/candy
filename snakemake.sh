@@ -17,18 +17,18 @@ conda activate snakemake
 
 # single sample cluster
 #snakemake Mutect2/multi/RFH001.vcf.gz --latency-wait 100 --rerun-incomplete -p \
-#--cluster "sbatch --ntasks 1 --cpus-per-task {threads} --partition cpu --job-name {rule} --time 5:00:00 -e {params.err} -o {params.out} --mem {resources.mem_mb} --parsable" \
+#--cluster "sbatch --ntasks 1 --cpus-per-task {threads} --partition cpu --job-name {rule} --time 5:00:00 -e logs/{rule}/{params.err} -o logs/{rule}/{params.out} --mem {resources.mem_mb} --parsable" \
 #--jobs 10 --keep-going --use-envmodules --cluster-status ./status-sacct.sh --rerun-trigger mtime
 
 snakemake Mutect2/temp/multi/RFH001_norm.vcf.gz --latency-wait 100 --rerun-incomplete -p \
---cluster "sbatch --ntasks 1 --cpus-per-task {threads} --partition cpu --job-name {rule} --time 5:00:00 -e {params.err} -o {params.out} --mem {resources.mem_mb} --parsable" \
---jobs 10 --keep-going --use-envmodules --cluster-status ./status-sacct.sh --rerun-trigger mtime
+--cluster "sbatch --ntasks 1 --cpus-per-task {threads} --partition cpu --job-name {rule} --time 5:00:00 -e logs/{rule}/{params.err} -o logs/{rule}/{params.out} --mem {resources.mem_mb} --parsable" \
+--jobs 10 --keep-going --use-envmodules --cluster-status ./status-sacct.sh
 
 #single sample local
 #snakemake Mutect2/multi/RFH001.vcf.gz --latency-wait 100 --rerun-incomplete -p --use-envmodules -c1
 
 #all cluster
-#snakemake --latency-wait 300 --rerun-incomplete -p --cluster "sbatch --ntasks 1 --cpus-per-task {threads} --partition cpu --job-name {rule} --time 5:00:00 -e {params.err} -o {params.out} --mem {resources.mem_mb}" --jobs 1000 --keep-going --use-envmodules 
+#snakemake --latency-wait 300 --rerun-incomplete -p --cluster "sbatch --ntasks 1 --cpus-per-task {threads} --partition cpu --job-name {rule} --time 5:00:00 -e logs/{rule}/{params.err} -o logs/{rule}/{params.out} --mem {resources.mem_mb}" --jobs 1000 --keep-going --use-envmodules 
 
 #singe samle dryrun
 #snakemake Mutect2/multi/RFH001.vcf.gz --rerun-incomplete -p --use-envmodules --dry-run
