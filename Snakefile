@@ -41,8 +41,8 @@ rule Mutect2_call:
         n='Mutect2/noise/{tum}.tar.gz'
     params:
         nn=get_normal_name,
-        err=lambda wildcards: "logs/{rule}/{wildcards.tum}.err",
-        out=lambda wildcards: "logs/{rule}/{wildcards.tum}.out"    
+        err=lambda wildcards: wildcards.tum+".err",
+        out=lambda wildcards: wildcards.tum+".out"    
     envmodules :
         "GATK/4.1.8.1-GCCcore-9.3.0-Java-1.8"
     threads: 8
@@ -73,8 +73,8 @@ rule learn_model:
     output:
         'Mutect2/noise/{tum}-read-orientation-model.tar.gz'
     params:
-        err=lambda wildcards: "logs/{rule}/{wildcards.tum}.err",
-        out=lambda wildcards: "logs/{rule}/{wildcards.tum}.out"    
+        err=lambda wildcards: wildcards.tum+".err",
+        out=lambda wildcards: wildcards.tum+".out"    
     envmodules :
         "GATK/4.1.8.1-GCCcore-9.3.0-Java-1.8"
     threads: 1
@@ -100,8 +100,8 @@ rule add_flags:
         'Mutect2/temp/or_flagged_{tum}.vcf.gz.filteringStats.tsv',
         v='Mutect2/temp/or_flagged_{tum}.vcf.gz'
     params:
-        err=lambda wildcards: "logs/{rule}/{wildcards.tum}.err",
-        out=lambda wildcards: "logs/{rule}/{wildcards.tum}.out"    
+        err=lambda wildcards: wildcards.tum+".err",
+        out=lambda wildcards: wildcards.tum+".out"    
     envmodules :
         "GATK/4.1.8.1-GCCcore-9.3.0-Java-1.8"
     threads: 1
@@ -126,8 +126,8 @@ rule vcf_index:
     output:
         'Mutect2/temp/or_flagged_{tum}.vcf.gz.tbi'
     params:
-        err=lambda wildcards: "logs/{rule}/{wildcards.tum}.err",
-        out=lambda wildcards: "logs/{rule}/{wildcards.tum}.out"    
+        err=lambda wildcards: wildcards.tum+".err",
+        out=lambda wildcards: wildcards.tum+".out"    
     envmodules :
         "BCFtools/1.12-GCC-10.2.0"
     threads: 1
@@ -149,8 +149,8 @@ rule vcf_normalise:
         v='Mutect2/temp/norm_{tum}.vcf.gz',
         i='Mutect2/temp/norm_{tum}.vcf.gz.tbi'
     params:
-        err=lambda wildcards: "logs/{rule}/{wildcards.tum}.err",
-        out=lambda wildcards: "logs/{rule}/{wildcards.tum}.out"    
+        err=lambda wildcards: wildcards.tum+ ".err",
+        out=lambda wildcards: wildcards.tum+ ".out"    
     threads: 1
     resources:
         mem_mb=10000
@@ -179,8 +179,8 @@ rule qual_filter:
     params:
         AD=AD,
         ROQ=ROQ,
-        err=lambda wildcards: "logs/{rule}/{wildcards.tum}.err",
-        out=lambda wildcards: "logs/{rule}/{wildcards.tum}.out"    
+        err=lambda wildcards: wildcards.tum+ ".err",
+        out=lambda wildcards: wildcards.tum+ ".out"    
     envmodules :
         "BCFtools/1.12-GCC-10.2.0"
     threads: 1
@@ -204,8 +204,8 @@ rule single_sample:
         v='Mutect2/single/{patient}.vcf.gz',
         i='Mutect2/single/{patient}.vcf.gz.tbi'
     params:
-        err=lambda wildcards: "logs/{rule}/{wildcards.patient}.err",
-        out=lambda wildcards: "logs/{rule}/{wildcards.patient}.out"    
+        err=lambda wildcards: wildcards.patient+ ".err",
+        out=lambda wildcards: wildcards.patient+ ".out"    
     threads: 1
     resources:
         mem_mb=10000
@@ -228,8 +228,8 @@ rule patient_positions:
     output:
        "Mutect2/temp/multi/{patient}_valid_pos.txt"
     params:
-        err=lambda wildcards: "logs/{rule}/{wildcards.patient}.err",
-        out=lambda wildcards: "logs/{rule}/{wildcards.patient}.out"
+        err=lambda wildcards: wildcards.patient+ ".err",
+        out=lambda wildcards: wildcards.patient+ ".out"
     threads: 1
     resources:
         mem_mb=10000
@@ -252,8 +252,8 @@ rule retrieve_from_vcf:
        v="Mutect2/temp/multi/{tum}_premerge.vcf.gz",
        i="Mutect2/temp/multi/{tum}_premerge.vcf.gz.tbi"
     params:
-        err=lambda wildcards: "logs/{rule}/{wildcards.tum}.err",
-        out=lambda wildcards: "logs/{rule}/{wildcards.tum}.out"
+        err=lambda wildcards: wildcards.tum+ ".err",
+        out=lambda wildcards: wildcards.tum+ ".out"
     threads: 1
     resources:
         mem_mb=10000
@@ -283,8 +283,8 @@ rule merge_vcf:
        "Mutect2/temp/multi/{patient}_merged.vcf.gz.tbi",
        v="Mutect2/temp/multi/{patient}_merged.vcf.gz"
     params:
-        err=lambda wildcards: "logs/{rule}/{wildcards.patient}.err",
-        out=lambda wildcards: "logs/{rule}/{wildcards.patient}.out"
+        err=lambda wildcards: wildcards.patient+ ".err",
+        out=lambda wildcards: wildcards.patient+ ".out"
     threads: 1
     resources:
         mem_mb=10000
@@ -311,8 +311,8 @@ rule remove_germline:
        v1=temp("Mutect2/temp/multi/{patient}_merged_GL_removed.vcf.gz"),
        v2="Mutect2/temp/multi/{patient}_merged_GL_removed_sorted.vcf.gz"
     params:
-        err=lambda wildcards: "logs/{rule}/{wildcards.patient}.err",
-        out=lambda wildcards: "logs/{rule}/{wildcards.patient}.out",
+        err=lambda wildcards: wildcards.patient+ ".err",
+        out=lambda wildcards: wildcards.patient+ ".out",
         GL=lambda wildcards: normals[patients.index(wildcards.patient)][0]
     threads: 1      
     resources:
@@ -339,11 +339,11 @@ rule normalise_merged:
     output:
        "Mutect2/temp/multi/{patient}_norm.vcf.gz"
     params:
-        err=lambda wildcards: "logs/{rule}/{wildcards.patient}.err",
-        out=lambda wildcards: "logs/{rule}/{wildcards.patient}.out"
+        err=lambda wildcards: wildcards.patient+".err",
+        out=lambda wildcards: wildcards.patient+".out"
     threads: 1      
     resources:
-        mem_mb=10000
+        mem_mb=8000
     envmodules:
         "HTSlib/1.14-GCC-11.2.0"  
     shell:
@@ -366,8 +366,8 @@ rule rescue_mission:
        obamlist=temp("Mutect2/temp/multi/{patient}_ordered_bamlist.txt"),
        s=temp("Mutect2/temp/multi/{patient}_samples.txt")
     params:
-        err=lambda wildcards: "logs/{rule}/{wildcards.patient}.err",
-        out=lambda wildcards: "logs/{rule}/{wildcards.patient}.out",
+        err=lambda wildcards: wildcards.patient+ ".err",
+        out=lambda wildcards: wildcards.patient+ ".out",
         res=RES
     threads: 1      
     resources:
