@@ -153,7 +153,7 @@ rule vcf_normalise:
     resources:
         mem_mb=10000
     envmodules:
-        "HTSlib/1.14-GCC-11.2.0" 
+        "HTSlib/1.15.1-GCC-11.3.0" 
     shell:
         """
         #echo "##INFO=<ID=AS_FilterStatus,Number=A" | sed "s/##INFO=<ID=AS_FilterStatus,Number=A/##INFO=<ID=AS_FilterStatus,Number=1/" && touch {output.v} && touch {output.i}
@@ -257,7 +257,7 @@ rule retrieve_from_vcf:
     resources:
         mem_mb=10000
     envmodules:
-        "HTSlib/1.14-GCC-11.2.0"
+        "HTSlib/1.15.1-GCC-11.3.0"
     shell:
         """
         zcat {input.v} | grep "^#" | bgzip >{output.v}
@@ -288,7 +288,7 @@ rule merge_vcf:
     resources:
         mem_mb=10000
     envmodules:
-        "HTSlib/1.14-GCC-11.2.0"
+        "HTSlib/1.15.1-GCC-11.3.0"
     shell:
         """
         /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools merge -0 -Oz -o {output.v} --force-samples {input.v}
@@ -317,7 +317,7 @@ rule remove_germline:
     resources:
         mem_mb=10000
     envmodules:
-        "HTSlib/1.14-GCC-11.2.0"
+        "HTSlib/1.15.1-GCC-11.3.0"
     shell:
         """
         echo {params.GL} > {output.s}
@@ -344,7 +344,7 @@ rule normalise_merged:
     resources:
         mem_mb=8000
     envmodules:
-        "HTSlib/1.14-GCC-11.2.0"  
+        "HTSlib/1.15.1-GCC-11.3.0"  
     shell:
         """
         /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools norm -m -any {input.v} | bgzip > {output}
