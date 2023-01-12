@@ -9,7 +9,7 @@ Automation of the workflow originally developped by Irene Lobon
 
 ### Install
 ```
-git clone --branch pipeline https://github.com/rabiafidan/SRM.git
+git clone --branch pipeline https://github.com/rabiafidan/candy.git
 ```
 and change directory to the repo
 
