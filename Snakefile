@@ -9,9 +9,10 @@ onstart:
     if set([len(x) for x in normals]) != {1}:
         print("Each patient must have only 1 normal!")
         sys.exit(1)
-    shell('mkdir -p logs/germline_SNP logs/VAF_filter logs/fill_tags_VAF logs/vcf2maf logs/Mutect2_call logs/learn_model logs/add_flags logs/vcf_index logs/vcf_normalise logs/qual_filter logs/patient_positions logs/single_sample logs/retrieve_from_vcf logs/merge_vcf logs/remove_germline logs/normalise_merged logs/rescue_mission')
+    shell('mkdir -p logs/concordanceQC logs/GL_norm_merge logs/GL_annot logs/germline_SNP logs/VAF_filter logs/fill_tags_VAF logs/vcf2maf logs/Mutect2_call logs/learn_model logs/add_flags logs/vcf_index logs/vcf_normalise logs/qual_filter logs/patient_positions logs/single_sample logs/retrieve_from_vcf logs/merge_vcf logs/remove_germline logs/normalise_merged logs/rescue_mission')
 
 localrules: all 
+ruleorder: GL_norm_merge>germline_SNP
 
 rule all:
     input:
@@ -19,11 +20,12 @@ rule all:
         ['Mutect2/temp/multi/fil_{tum}.vcf.gz'.format(tum=tums)for tums in all_multi_tumour],
         ['Mutect2/multi/{patient}.vcf.gz'.format(patient=pats)for pats in multi_patients],
         ['Mutect2/single/{patient}.vcf.gz'.format(patient=pats)for pats in single_patients],
-        ['GL_variant/'+x+'.vcf' for x in recal["SampleName"]]
-        #["MAF/multi/{tum}.maf".format(tum=tums)for tums in all_multi_tumour],
-        #["MAF/single/{tum}.maf".format(tum=tums)for tums in all_single_tumour]
+        ["MAF/multi/{tum}.maf".format(tum=tums)for tums in all_multi_tumour],
+        ["MAF/single/{tum}.maf".format(tum=tums)for tums in all_single_tumour],
+        ['GL_variant/'+x+'.vcf' for x in recal["SampleName"]],
+        ["GL_variant/nmerged_"+x+".vcf" for x in ALL_TUMOURS],
+        ["GL_variant/discordance_"+x+".txt" for x in ALL_TUMOURS]
 
-        
 
 rule Mutect2_call:
     """
@@ -442,14 +444,14 @@ rule VAF_filter:
 rule vcf2maf:
     input:
         ref=REF_GEN,
-        zvcf= lambda wildcards: '/nemo/project/proj-tracerX/working/SRM/RABIA/VEP/'+wildcards.rep+'/Annotation/'+wildcards.rep+'/VEP/filtered_' +recal.loc[recal['SampleName']==wildcards.tum,'PatientName'].iloc[0]+'_VEP.ann.vcf.gz'
+        vcf= lambda wildcards: '/nemo/project/proj-tracerX/working/SRM/RABIA/VEP/'+wildcards.rep+'/Annotation/'+wildcards.rep+'/VEP/filtered_' +recal.loc[recal['SampleName']==wildcards.tum,'PatientName'].iloc[0]+'_VEP.ann.vcf'
     output:
         "MAF/{rep}/{tum}.maf"
     params:
         err=lambda wildcards: wildcards.tum+ ".err",
         out=lambda wildcards: wildcards.tum+ ".out",
         nn=get_normal_name,
-        vcf= lambda wildcards, input: input.zvcf[:-3]
+        ncbi=config['ref_gen']
     threads: 1
     resources:
         mem_mb=5000
@@ -458,20 +460,22 @@ rule vcf2maf:
         "SAMtools/1.16.1-GCC-11.3.0"
     shell:
         """
-        gunzip {input.zvcf}
         perl /camp/project/tracerX/working/PIPELINES/Analysis_Modules/vcf2maf/v1.0/vcf2maf.pl \
-			--input-vcf {params.vcf} \
+			--input-vcf {input.vcf} \
 			--output-maf {output} \
 			--tumor-id {wildcards.tum} \
 			--normal-id {params.nn} \
 			--inhibit-vep \
-			--ref-fasta {input.ref}
+			--ref-fasta {input.ref} \
+            --retain-fmt DP,AD,VAF \
+            --ncbi-build {params.ncbi}
         """
 
 
 rule germline_SNP:
     """
     Call germline SNPs from all tumour and normal samples
+    Attention: This step doesn't filter for the panel BED file
     """
     input:
         lambda wildcards: recal.loc[(recal['SampleName']==wildcards.samp) ,'bai'],
@@ -498,21 +502,126 @@ rule germline_SNP:
         """
 
 
+rule GL_annot:
+    """
+    Annotate GL variants using VEP
+    Couldn't get it work, gives Bus Error. Might be because of NEMO. Not used for now.
+    """
+    input:
+        "GL_variant/{samp}.vcf"
+    output:
+        v="GL_VEP/{samp}.vcf"
+    params:
+        err=lambda wildcards: wildcards.samp+ ".err",
+        out=lambda wildcards: wildcards.samp+ ".out",
+        ncbi=config['ref_gen']
+    threads: 4
+    resources:
+        mem_mb=50000
+    envmodules:
+        "VEP/95.0-foss-2018b-Perl-5.28.0" 
+    shell:
+        """
+        vep \
+        -i {input} \
+        -o {output} \
+        --symbol \
+        --assembly {params.ncbi} \
+        --cache \
+        --dir_cache /nemo/project/proj-tracerX/working/SRM/RABIA/.vep \
+        --cache_version 108 \
+        --no_stats \
+        --filter_common \
+        --format vcf \
+        --buffer_size 30 \ #default 5000. Decreases memory at the expense of runtime
+        --per_gene \ 
+        --total_length \
+        --fork {threads} \
+        --vcf
+        """
+
+
+rule GL_norm_merge:
+    """
+    Compress, index, normalise and merge tumour and corresponding normals
+    adaptation of /camp/project/tracerX/working/PIPELINES/Analysis_Modules/qc_concordance/count_discordant.sh 
+    """
+    input:
+        n=get_normal_GL,
+        t="GL_variant/{tum}.vcf"
+    output:
+        zvt="GL_variant/{tum}.vcf.gz",
+        i1="GL_variant/{tum}.vcf.gz.tbi",
+        i2="GL_variant/norm_{tum}.vcf.gz.tbi",
+        vnt="GL_variant/norm_{tum}.vcf.gz",
+        vmt="GL_variant/nmerged_{tum}.vcf" #real target
+    params:
+        err=lambda wildcards: wildcards.tum+ ".err",
+        out=lambda wildcards: wildcards.tum+ ".out",
+        zvn=lambda wildcards, input: input.n+".gz",
+        zvnn=lambda wildcards, input: "GL_variant/normalised_"+input.n.strip().split("/")[1]+".gz"
+    threads: 1
+    resources:
+        mem_mb=10000
+    envmodules:
+        "HTSlib/1.15.1-GCC-11.3.0"
+    shell:
+        """
+        #compress & index
+        bgzip -c {input.t} > {output.zvt}
+        /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools index --tbi -f {output.zvt}
+        bgzip -c {input.n} > {params.zvn}
+        /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools index --tbi -f {params.zvn}
+        #normalise & index
+        /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools norm -m -any {output.zvt} -Oz -o {output.vnt}
+        /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools index --tbi -f {output.vnt}
+        /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools norm -m -any {params.zvn} -Oz -o {params.zvnn}
+        /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools index --tbi -f {params.zvnn}
+        #merge
+        /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools merge -Ov -o {output.vmt} {params.zvnn} {output.vnt}
+        """
+
+
 rule concordanceQC:
     """
     Check if blood and tumour samples belong to the same patient.
-    /camp/project/tracerX/working/PIPELINES/Analysis_Modules/qc_concordance/count_discordant.sh 
+    Count discordant calls between normal and tumour
+    Filter for the panel BED file, also some hard coded AD filter. Adding it as parameter is very easy, if necessary.
+    adaptation of /camp/project/tracerX/working/PIPELINES/Analysis_Modules/qc_concordance/count_discordant.sh 
     """
     input:
-
+        v="GL_variant/nmerged_{tum}.vcf",
+        intv=INT
     output:
-
+        "GL_variant/discordance_{tum}.txt"
     params:
-        err=lambda wildcards: wildcards.patient+ ".err",
-        out=lambda wildcards: wildcards.patient+ ".out"
+        err=lambda wildcards: wildcards.tum+ ".err",
+        out=lambda wildcards: wildcards.tum+ ".out"
     threads: 1      
     resources:
         mem_mb=10000   
     shell:
         """
+        # Homozygous alt in tumour (highQ DP>=35, ref D==0)  # FORMAT/AD[1:0] : 0-based. second sample's first AD, meaning tumour's  ref allele count
+        t11=$(/nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools view -T {input.intv} -H -i 'FORMAT/AD[1:0]==0 && FORMAT/AD[1:1]>=35 && FMT/GT[1]="AA"' {input.v}  | wc -l)
+        # Of them n with gl genotype ./.
+        t11g00=$(/nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools view -T {input.intv} -H -i 'FORMAT/AD[1:0]==0 && FORMAT/AD[1:1]>=35 && FMT/GT[1]="AA" && FMT/GT[0]="mis"' {input.v}  | wc -l)
+        
+        # Homozygous alt in germline (highQ DP>=35, ref D==0)
+        g11=$(/nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools view -T {input.intv} -H -i 'FORMAT/AD[0:0]==0 && FORMAT/AD[0:1]>=35 && FMT/GT[0]="AA"' {input.v}  | wc -l)
+        # Of them n with tumour genotype ./.
+        g11t00=$(/nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools view -T {input.intv} -H -i 'FORMAT/AD[0:0]==0 && FORMAT/AD[0:1]>=35 && FMT/GT[0]="AA" && FMT/GT[1]="mis"' {input.v}  | wc -l)
+        
+        # Het in tumour (highQ RD and AD >=15)
+        t01=$(/nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools view -T {input.intv} -H -i 'FORMAT/AD[1:0]>15 && FORMAT/AD[1:1]>=15 && FMT/GT[1]="het"' {input.v}  | wc -l)
+        # Of them n with ./. or 1/1 in gl
+        t01gnot=$(/nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools view -T {input.intv} -H -i 'FORMAT/AD[1:0]>15 && FORMAT/AD[1:1]>=15 && FMT/GT[1]="het" && (FMT/GT[0]="mis"|| FMT/GT[0]="AA")' {input.v}  | wc -l)
+        
+        # Het in gl (highQ RD and AD >=15)
+        g01=$(/nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools view -T {input.intv} -H -i 'FORMAT/AD[0:0]>15 && FORMAT/AD[0:1]>=15 && FMT/GT[0]="het"' {input.v}  | wc -l)
+        # Of them n with ./. or 1/1 in tumour
+        g01tnot=$(/nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools view -T {input.intv} -H -i 'FORMAT/AD[0:0]>15 && FORMAT/AD[0:1]>=15 && FMT/GT[0]="het" && (FMT/GT[1]="mis"|| FMT/GT[1]="AA")' {input.v}  | wc -l)
+        
+        echo $tum_id $gl_id $t11 $t11g00 $g11 $g11t00 $t01 $t01gnot $g01 $g01tnot | tr ' ' '\t' > {output}
+
         """
