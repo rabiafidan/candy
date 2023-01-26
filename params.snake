@@ -89,3 +89,8 @@ def get_tumour_bai(wildcards):
     tumbai=recal.loc[recal['SampleName']==wildcards.tum ,'bai']
     return list(tumbai)
 
+def get_normal_GL(wildcards):
+    pat=recal.loc[recal['SampleName']==wildcards.tum,'PatientName']
+    nor=recal.loc[(recal['PatientName']==pat.iloc[0]) & (recal['SampleType']==0) ,'SampleName'].iloc[0]
+    return 'GL_variant/' + nor + '.vcf'
+    

@@ -16,7 +16,7 @@ conda activate snakemake
 ##### uncomment as you wish ######
 
 # single sample cluster
-#snakemake Mutect2/temp/multi/RFH001_norm.vcf.gz --latency-wait 100 --rerun-incomplete -p \
+#snakemake GL_VEP/UME_UME036_R2d1.vcf --latency-wait 100 --rerun-incomplete -p \
 #--cluster "sbatch --ntasks 1 --cpus-per-task {threads} --partition cpu --job-name {rule} --time 5:00:00 -e logs/{rule}/{params.err} -o logs/{rule}/{params.out} --mem {resources.mem_mb} --parsable" \
 #--jobs 10 --keep-going --use-envmodules --cluster-status ./status-sacct.sh
 
@@ -24,8 +24,8 @@ conda activate snakemake
 #snakemake Mutect2/multi/RFH001.vcf.gz --latency-wait 100 --rerun-incomplete -p --use-envmodules -c1
 
 #all cluster
-snakemake -n --latency-wait 100 --rerun-incomplete -p \
---cluster "sbatch --ntasks 1 --cpus-per-task {threads} --partition cpu --job-name {rule} --time 5:00:00 -e logs/{rule}/{params.err} -o logs/{rule}/{params.out} --mem {resources.mem_mb} --parsable" \
+snakemake --latency-wait 100 --rerun-incomplete -p \
+--cluster "sbatch --reservation=candylab_2323 --ntasks 1 --cpus-per-task {threads} --partition cpu --job-name {rule} --time 3-00:00:00 -e logs/{rule}/{params.err} -o logs/{rule}/{params.out} --mem {resources.mem_mb} --parsable" \
 --jobs 500 --keep-going --use-envmodules --cluster-status ./status-sacct.sh
 
 #singe samle dryrun

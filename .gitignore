@@ -18,3 +18,12 @@ SAREK_1/pipeline_info
 .snakemake/
 .vscode/
 nf.config
+old_logs
+**_to_keep.txt
+VEP
+MAF
+MAF_v2
+GL_variant
+.vep/
+4**.txt
+MAF_old/

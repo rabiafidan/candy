@@ -9,9 +9,9 @@ onstart:
     if set([len(x) for x in normals]) != {1}:
         print("Each patient must have only 1 normal!")
         sys.exit(1)
-    shell('mkdir -p logs/concordanceQC logs/GL_norm_merge logs/GL_annot logs/germline_SNP logs/VAF_filter logs/fill_tags_VAF logs/vcf2maf logs/Mutect2_call logs/learn_model logs/add_flags logs/vcf_index logs/vcf_normalise logs/qual_filter logs/patient_positions logs/single_sample logs/retrieve_from_vcf logs/merge_vcf logs/remove_germline logs/normalise_merged logs/rescue_mission')
+    shell('mkdir -p logs/split_ann_vcf logs/concordanceQC logs/GL_norm_merge logs/GL_annot logs/germline_SNP logs/VAF_filter logs/fill_tags_VAF logs/vcf2maf_single logs/vcf2maf_multi logs/Mutect2_call logs/learn_model logs/add_flags logs/vcf_index logs/vcf_normalise logs/qual_filter logs/patient_positions logs/single_sample logs/retrieve_from_vcf logs/merge_vcf logs/remove_germline logs/normalise_merged logs/rescue_mission')
 
-localrules: all 
+localrules: all,concordanceQC,split_ann_vcf,vcf2maf_multi 
 ruleorder: GL_norm_merge>germline_SNP
 
 rule all:
@@ -440,13 +440,17 @@ rule VAF_filter:
 
 
 ################ SAREK ANNOTATION AT /nemo/project/proj-tracerX/working/SRM/RABIA/Mutect2/multi/tag_VAF/annotate.sh ############
+     
 
-rule vcf2maf:
+rule vcf2maf_single:
+    """
+    Take SAREK VEP annotated single sample vcf files and turn them into MAF 
+    """
     input:
         ref=REF_GEN,
-        vcf= lambda wildcards: '/nemo/project/proj-tracerX/working/SRM/RABIA/VEP/'+wildcards.rep+'/Annotation/'+wildcards.rep+'/VEP/filtered_' +recal.loc[recal['SampleName']==wildcards.tum,'PatientName'].iloc[0]+'_VEP.ann.vcf'
+        vcf= lambda wildcards: '/nemo/project/proj-tracerX/working/SRM/RABIA/VEP/single/Annotation/single/VEP/filtered_' +recal.loc[recal['SampleName']==wildcards.tum,'PatientName'].iloc[0]+'_VEP.ann.vcf'
     output:
-        "MAF/{rep}/{tum}.maf"
+        "MAF/single/{tum}.maf"
     params:
         err=lambda wildcards: wildcards.tum+ ".err",
         out=lambda wildcards: wildcards.tum+ ".out",
@@ -470,6 +474,35 @@ rule vcf2maf:
             --retain-fmt DP,AD,VAF \
             --ncbi-build {params.ncbi}
         """
+
+rule split_ann_vcf:
+    """
+    Take SAREK VEP annotated multi sample vcf files and split them into individual tumours 
+    """
+    input:
+        lambda wildcards: '/nemo/project/proj-tracerX/working/SRM/RABIA/VEP/multi/Annotation/multi/VEP/filtered_' +recal.loc[recal['SampleName']==wildcards.tum,'PatientName'].iloc[0]+ '_VEP.ann.vcf'
+    output:
+        "VEP/multi/Annotation/multi/VEP/split/filtered_{tum}_VEP.ann.vcf"
+    params:
+        err=lambda wildcards: wildcards.tum+ ".err",
+        out=lambda wildcards: wildcards.tum+ ".out",
+        nn=get_normal_name
+    threads: 1
+    resources: 
+        mem_mb=4000
+    shell:
+        """
+        /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools view -s {params.nn},{wildcards.tum} {input} | /nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools view -i 'FMT/GT[1]="alt"' -Ov -o {output}
+        """    
+
+
+use rule vcf2maf_single as vcf2maf_multi with:
+    input:
+        ref=REF_GEN,
+        vcf="VEP/multi/Annotation/multi/VEP/split/filtered_{tum}_VEP.ann.vcf"
+    output:
+        "MAF/multi/{tum}.maf"
+    
 
 
 rule germline_SNP:
@@ -559,7 +592,7 @@ rule GL_norm_merge:
         err=lambda wildcards: wildcards.tum+ ".err",
         out=lambda wildcards: wildcards.tum+ ".out",
         zvn=lambda wildcards, input: input.n+".gz",
-        zvnn=lambda wildcards, input: "GL_variant/normalised_"+input.n.strip().split("/")[1]+".gz"
+        zvnn=lambda wildcards, input: "GL_variant/norm_"+input.n.strip().split("/")[1]+".gz"
     threads: 1
     resources:
         mem_mb=10000
@@ -596,7 +629,8 @@ rule concordanceQC:
         "GL_variant/discordance_{tum}.txt"
     params:
         err=lambda wildcards: wildcards.tum+ ".err",
-        out=lambda wildcards: wildcards.tum+ ".out"
+        out=lambda wildcards: wildcards.tum+ ".out",
+        normal=get_normal_name
     threads: 1      
     resources:
         mem_mb=10000   
@@ -622,6 +656,9 @@ rule concordanceQC:
         # Of them n with ./. or 1/1 in tumour
         g01tnot=$(/nemo/lab/turajlics/home/users/fidanr/bcftools/bin/bcftools view -T {input.intv} -H -i 'FORMAT/AD[0:0]>15 && FORMAT/AD[0:1]>=15 && FMT/GT[0]="het" && (FMT/GT[1]="mis"|| FMT/GT[1]="AA")' {input.v}  | wc -l)
         
-        echo $tum_id $gl_id $t11 $t11g00 $g11 $g11t00 $t01 $t01gnot $g01 $g01tnot | tr ' ' '\t' > {output}
+        echo {wildcards.tum} {params.normal} $t11 $t11g00 $g11 $g11t00 $t01 $t01gnot $g01 $g01tnot | tr ' ' '\\t' > {output}
 
         """
+
+        #echo "tumourID germlineID total_homA_tumour homA_tumour_homR_gl total_homA_gl homA_gl_homR_tumour total_het_tumour het_tumour_not_gl total_het_gl het_gl_not_tumour" | tr ' ' '\t' > all_discordance.txt
+        #cat discordance*txt  >> all_discordance.txt
